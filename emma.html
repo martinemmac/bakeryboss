@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>3D Cafe Rush</title>
+  <title>3D Cafe Rush - Karen Rage Update</title>
   <style>
     body {
       margin: 0;
@@ -54,6 +54,41 @@
       z-index: 5;
     }
 
+    #rageBox {
+      position: fixed;
+      top: 150px;
+      right: 12px;
+      background: rgba(20, 12, 8, 0.82);
+      padding: 12px 16px;
+      border-radius: 12px;
+      width: 360px;
+      line-height: 1.45;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.35);
+      z-index: 5;
+    }
+
+    #rageOuter {
+      width: 100%;
+      height: 20px;
+      background: #3b241b;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-top: 8px;
+      border: 2px solid #fff0c2;
+    }
+
+    #rageInner {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #ffd166, #ef476f, #b00020);
+      transition: width 0.25s;
+    }
+
+    #rageText {
+      margin-top: 6px;
+      color: #fff0c2;
+    }
+
     #message {
       position: fixed;
       bottom: 18px;
@@ -68,6 +103,23 @@
       text-align: center;
       z-index: 5;
       box-shadow: 0 8px 25px rgba(0,0,0,0.35);
+    }
+
+    #karenSpeech {
+      position: fixed;
+      top: 42%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      color: #b00020;
+      padding: 18px 30px;
+      border-radius: 18px;
+      font-size: 36px;
+      font-weight: bold;
+      border: 5px solid #b00020;
+      display: none;
+      z-index: 30;
+      box-shadow: 0 15px 40px rgba(0,0,0,0.5);
     }
 
     .modal {
@@ -130,7 +182,7 @@
 
     #timerBarInner {
       height: 100%;
-      width: 100%;
+      width: 0%;
       background: #57cc99;
     }
 
@@ -204,7 +256,7 @@
       color: #2b1a12;
       border-radius: 18px;
       padding: 35px;
-      width: 520px;
+      width: 540px;
       border: 6px solid #b00020;
       box-shadow: 0 20px 55px rgba(0,0,0,0.6);
     }
@@ -219,12 +271,11 @@
 <a id="backLink" href="index.html">&larr; Menu</a>
 
 <div id="hud">
-  <b>☕ 3D Cafe Rush</b><br>
-  Move: WASD / Arrow Keys<br>
-  Interact: E or Space<br>
-  Restart if fired: R<br><br>
+  <b>3D Cafe Rush</b> (first-person)<br>
+  Move: WASD &nbsp;|&nbsp; Look: Mouse / Arrows<br>
+  Click the game to capture the mouse<br>
+  Interact: E or Space &nbsp;|&nbsp; Restart: R<br><br>
   <span id="dayText"></span><br>
-  <span id="bestText"></span><br>
   <span id="holdingText"></span><br>
   <span id="ovenText"></span>
 </div>
@@ -237,7 +288,16 @@
   </div>
 </div>
 
+<div id="rageBox">
+  <b>Karen's Rage Meter</b>
+  <div id="rageOuter">
+    <div id="rageInner"></div>
+  </div>
+  <div id="rageText">0 / 5 mistakes</div>
+</div>
+
 <div id="message">Loading...</div>
+<div id="karenSpeech">you're fired!</div>
 
 <div id="pantryModal" class="modal">
   <div class="panel">
@@ -282,20 +342,14 @@ let scene, camera, renderer;
 let clock = new THREE.Clock();
 
 const keys = {};
+const RAGE_LIMIT = 5;
+
 let state = "playing";
 
 let day = 1;
 let ordersDone = 0;
 let ordersNeeded = 3;
 let mistakes = 0;
-let bestDay = Number(localStorage.getItem("cafeRushBestDay") || 1);
-
-function recordBestDay() {
-  if (day > bestDay) {
-    bestDay = day;
-    localStorage.setItem("cafeRushBestDay", String(bestDay));
-  }
-}
 
 let message = "Walk to the customer at the entrance and press E.";
 let firedReason = "";
@@ -355,15 +409,26 @@ let holding = null;
 let player = {
   group: null,
   speed: 5.2,
-  walk: 0
+  walk: 0,
+  yaw: Math.PI,   // facing direction (radians); start looking toward the cafe
+  pitch: 0,       // look up/down
+  eyeHeight: 1.7
 };
 
 let customer = {
   group: null,
+  artMesh: null,
   active: false,
   following: false,
   seated: false,
   tableIndex: null
+};
+
+let karen = {
+  group: null,
+  active: false,
+  phase: "hidden",
+  timer: 0
 };
 
 let oven = {
@@ -390,7 +455,6 @@ let prepGame = {
 };
 
 let cutscene = {
-  active: false,
   timer: 0,
   mesh: null,
   recipe: null
@@ -405,11 +469,63 @@ const stationPositions = {
   trash: new THREE.Vector3(-8.5, 0, 4.3)
 };
 
+const entrancePos = new THREE.Vector3(9.1, 0, 6.2);
+
 const tables = [
   { pos: new THREE.Vector3(6.7, 0, -3.2), occupied: false },
   { pos: new THREE.Vector3(7.1, 0, 2.0), occupied: false },
   { pos: new THREE.Vector3(3.6, 0, 3.4), occupied: false }
 ];
+
+// ----- AI character art (2D billboards) -----
+const CHARACTER_ART = {
+  chef: "assets/characters/chef.png",
+  karen: "assets/characters/karen.png",
+  customers: [
+    "assets/characters/customer1.png",
+    "assets/characters/customer2.png",
+    "assets/characters/customer3.png",
+    "assets/characters/customer4.png",
+    "assets/characters/customer5.png"
+  ]
+};
+
+const textureCache = {};
+const billboards = []; // sprites that should always face the camera
+const _bbWorldPos = new THREE.Vector3(); // scratch: billboard world position
+const _bbLook = new THREE.Vector3();     // scratch: billboard -> camera dir
+let _bbYaw = 0, _bbPitch = 0;            // scratch: billboard facing angles
+
+function loadCharacterTexture(url) {
+  if (textureCache[url]) return textureCache[url];
+
+  const tex = new THREE.TextureLoader().load(url);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  textureCache[url] = tex;
+  return tex;
+}
+
+// Build a flat, upright image that always faces the camera.
+// height = world-units tall; aspect = width/height of the source art.
+function createBillboard(url, height = 2.4, aspect = 0.5) {
+  const tex = loadCharacterTexture(url);
+
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    alphaTest: 0.5,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(height * aspect, height), mat);
+  mesh.position.y = height / 2;
+  mesh.userData.isBillboard = true;
+  mesh.renderOrder = 2;
+
+  billboards.push(mesh);
+  return mesh;
+}
 
 try {
   init();
@@ -428,9 +544,13 @@ function showFatalError(err) {
     "padding:30px;z-index:50;font-family:Arial,sans-serif;";
   div.innerHTML =
     "<h1>Couldn't start 3D Cafe Rush</h1>" +
-    "<p style='max-width:520px;line-height:1.5'>This game needs WebGL (3D graphics). " +
-    "Your browser blocked it. Try enabling hardware acceleration, or open it in " +
-    "Chrome/Firefox/Safari on a normal computer.</p>" +
+    "<p style='max-width:560px;line-height:1.5'>This game needs WebGL (3D graphics), " +
+    "which this view can't provide. If you opened it inside an editor preview pane, " +
+    "open the file in a real browser tab instead (Chrome, Firefox, or Safari). " +
+    "Otherwise, enable hardware acceleration in your browser settings.</p>" +
+    "<p style='max-width:560px;line-height:1.5;opacity:0.8;font-size:14px'>Tip: double-click " +
+    "<b>emma.html</b> in Finder, or run a local server and visit it at " +
+    "<b>http://localhost:8000/emma.html</b>.</p>" +
     "<p><a href='index.html' style='color:#ffd166'>&larr; Back to menu</a></p>";
   document.body.appendChild(div);
 }
@@ -441,7 +561,13 @@ function init() {
 
   camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 100);
 
-  renderer = new THREE.WebGLRenderer({ antialias: true });
+  // Allow software/fallback WebGL so the game still runs in sandboxed
+  // preview panes and machines without hardware acceleration.
+  renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    failIfMajorPerformanceCaveat: false,
+    powerPreference: "default"
+  });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   document.body.appendChild(renderer.domElement);
@@ -470,6 +596,9 @@ function init() {
 
   customer.group = createCustomer();
   scene.add(customer.group);
+
+  karen.group = createKaren();
+  scene.add(karen.group);
 
   window.addEventListener("resize", onResize);
 }
@@ -652,59 +781,41 @@ function createTables() {
 }
 
 function createPlayer() {
-  const g = new THREE.Group();
-
-  const body = box(0.55, 0.75, 0.35, 0x203040);
-  body.position.y = 1.15;
-  g.add(body);
-
-  const apron = box(0.38, 0.62, 0.38, 0xf1f1ea);
-  apron.position.set(0, 1.1, 0.02);
-  g.add(apron);
-
-  const head = box(0.48, 0.48, 0.48, 0xdba776);
-  head.position.y = 1.8;
-  g.add(head);
-
-  const hair = box(0.52, 0.18, 0.52, 0x3a241b);
-  hair.position.y = 2.1;
-  g.add(hair);
-
-  const arm1 = box(0.16, 0.65, 0.16, 0xdba776);
-  arm1.position.set(-0.42, 1.15, 0);
-  g.add(arm1);
-
-  const arm2 = arm1.clone();
-  arm2.position.x = 0.42;
-  g.add(arm2);
-
-  const leg1 = box(0.18, 0.65, 0.18, 0x1f1f1f);
-  leg1.position.set(-0.16, 0.35, 0);
-  g.add(leg1);
-
-  const leg2 = leg1.clone();
-  leg2.position.x = 0.16;
-  g.add(leg2);
-
-  return g;
+  // First-person: the camera lives at the chef's eyes, so we don't draw the
+  // chef's own body. The group is still the movement anchor for everything
+  // (camera, held food, interaction distances).
+  return new THREE.Group();
 }
 
 function createCustomer() {
   const g = new THREE.Group();
 
-  const body = box(0.5, 0.7, 0.35, 0x345995);
-  body.position.y = 1.05;
-  g.add(body);
-
-  const head = box(0.45, 0.45, 0.45, 0xe7b98d);
-  head.position.y = 1.65;
-  g.add(head);
-
-  const hair = box(0.5, 0.18, 0.5, 0x3a241b);
-  hair.position.y = 1.94;
-  g.add(hair);
+  // The customer art swaps per arrival; build with the first image and
+  // keep a reference so newCustomer() can change the texture.
+  const art = createBillboard(CHARACTER_ART.customers[0], 2.5, 0.42);
+  art.userData.isCustomerArt = true;
+  g.add(art);
+  customer.artMesh = art;
 
   g.visible = false;
+  return g;
+}
+
+function setCustomerArt(url) {
+  if (!customer.artMesh) return;
+  customer.artMesh.material.map = loadCharacterTexture(url);
+  customer.artMesh.material.needsUpdate = true;
+}
+
+function createKaren() {
+  const g = new THREE.Group();
+
+  const art = createBillboard(CHARACTER_ART.karen, 2.9, 0.46);
+  g.add(art);
+
+  g.visible = false;
+  g.position.copy(entrancePos);
+
   return g;
 }
 
@@ -723,10 +834,22 @@ function startDay() {
   resetOven();
 
   player.group.position.set(0, 0, 5.2);
-  newCustomer();
+  player.group.rotation.z = 0;
+  player.yaw = Math.PI;   // face into the cafe (toward -Z)
+  player.pitch = 0;
 
+  karen.active = false;
+  karen.phase = "hidden";
+  karen.timer = 0;
+  karen.group.visible = false;
+  karen.group.position.copy(entrancePos);
+
+  document.getElementById("karenSpeech").style.display = "none";
+
+  newCustomer();
   hideMenus();
   updateHUD();
+  updateRageMeter();
 }
 
 function newCustomer() {
@@ -735,7 +858,10 @@ function newCustomer() {
   customer.seated = false;
   customer.tableIndex = null;
   customer.group.visible = true;
-  customer.group.position.set(9.1, 0, 6.2);
+  customer.group.position.copy(entrancePos);
+
+  const pics = CHARACTER_ART.customers;
+  setCustomerArt(pics[Math.floor(Math.random() * pics.length)]);
 
   currentOrder = null;
   holding = null;
@@ -774,6 +900,26 @@ function resetOven() {
     burnMistakeCounted: false,
     foodMesh: null
   };
+}
+
+function addMistake(reason) {
+  if (state === "fired" || state === "dayclear" || state === "karenCutscene") return;
+
+  mistakes++;
+  message = reason + " Karen's rage increased!";
+
+  updateRageMeter();
+
+  if (mistakes >= RAGE_LIMIT) {
+    startKarenCutscene();
+  }
+}
+
+function updateRageMeter() {
+  const pct = Math.min(1, mistakes / RAGE_LIMIT);
+
+  document.getElementById("rageInner").style.width = (pct * 100) + "%";
+  document.getElementById("rageText").textContent = mistakes + " / " + RAGE_LIMIT + " mistakes";
 }
 
 function interact() {
@@ -820,6 +966,7 @@ function interact() {
 
   if (customer.active && customer.seated && currentOrder) {
     const table = tables[customer.tableIndex];
+
     if (playerPos.distanceTo(table.pos) < 1.7) {
       serveTable();
       return;
@@ -858,6 +1005,8 @@ function openPantry() {
 
   selectedIngredients = [];
   state = "pantry";
+  releasePointer();
+
   document.getElementById("neededText").textContent =
     "Needed: " + currentOrder.recipe.ingredients.join(", ");
 
@@ -867,6 +1016,7 @@ function openPantry() {
   unlockedIngredients.forEach(item => {
     const btn = document.createElement("button");
     btn.textContent = item;
+
     btn.onclick = () => {
       if (selectedIngredients.includes(item)) {
         selectedIngredients = selectedIngredients.filter(i => i !== item);
@@ -876,6 +1026,7 @@ function openPantry() {
         btn.classList.add("selected");
       }
     };
+
     box.appendChild(btn);
   });
 
@@ -883,9 +1034,9 @@ function openPantry() {
 }
 
 function closePantry() {
-  state = "playing";
+  if (state === "pantry") state = "playing";
   document.getElementById("pantryModal").style.display = "none";
-  message = "Pantry cancelled.";
+  message = "Pantry closed.";
 }
 
 function finishPantry() {
@@ -897,9 +1048,8 @@ function finishPantry() {
     needed.every((item, i) => item === chosen[i]);
 
   if (!correct) {
-    mistakes++;
+    addMistake("Wrong ingredients.");
     closePantry();
-    message = "Wrong ingredients. Mistake counted.";
     return;
   }
 
@@ -927,6 +1077,7 @@ function openPrep() {
   }
 
   state = "prep";
+  releasePointer();
 
   prepGame = {
     type: currentOrder.recipe.prepTask,
@@ -993,7 +1144,7 @@ function showPrepScreen() {
 }
 
 function cancelPrep() {
-  state = "playing";
+  if (state === "prep") state = "playing";
   document.getElementById("prepModal").style.display = "none";
   message = "Prep cancelled.";
 }
@@ -1013,8 +1164,7 @@ function handlePrepKey(key) {
         finishPrep();
       }
     } else {
-      mistakes++;
-      message = "Bad cut. Mistake counted.";
+      addMistake("Bad cut.");
     }
   }
 
@@ -1022,8 +1172,7 @@ function handlePrepKey(key) {
     if (prepGame.fill >= 0.55 && prepGame.fill <= 0.72) {
       finishPrep();
     } else {
-      mistakes++;
-      message = "Wrong measurement. Mistake counted.";
+      addMistake("Wrong measurement.");
     }
   }
 
@@ -1066,6 +1215,7 @@ function finishPrep() {
       recipe: currentOrder.recipe,
       burned: false
     };
+
     createHeldMesh("rawFood");
     message = "Prep finished. Put the food in the oven.";
   } else {
@@ -1074,6 +1224,7 @@ function finishPrep() {
       recipe: currentOrder.recipe,
       burned: false
     };
+
     createHeldMesh("cookedFood");
     message = "Prep finished. Serve it to the table.";
   }
@@ -1138,7 +1289,6 @@ function useOven() {
 
 function startOvenCutscene(recipe) {
   state = "cutscene";
-  cutscene.active = true;
   cutscene.timer = 0;
   cutscene.recipe = recipe;
 
@@ -1174,22 +1324,22 @@ function serveTable() {
   }
 
   if (holding.type !== "cookedFood") {
-    firePlayer("You served food before it was ready.");
+    failCurrentOrder("You served food before it was ready.");
     return;
   }
 
   if (holding.burned) {
-    firePlayer("You served burned food.");
+    failCurrentOrder("You served burned food.");
     return;
   }
 
   if (holding.recipe.name !== currentOrder.recipe.name) {
-    firePlayer("You served the wrong order.");
+    failCurrentOrder("You served the wrong order.");
     return;
   }
 
   if (currentOrder.timeLeft <= 0) {
-    firePlayer("The order was served late.");
+    failCurrentOrder("The order was served late.");
     return;
   }
 
@@ -1217,6 +1367,35 @@ function serveTable() {
   }
 }
 
+function failCurrentOrder(reason) {
+  addMistake(reason);
+
+  if (mistakes >= RAGE_LIMIT) return;
+
+  if (customer.active && customer.seated && customer.tableIndex !== null) {
+    tables[customer.tableIndex].occupied = false;
+  }
+
+  customer.active = false;
+  customer.following = false;
+  customer.seated = false;
+  customer.tableIndex = null;
+  customer.group.visible = false;
+
+  currentOrder = null;
+  holding = null;
+  clearHeldMesh();
+  resetOven();
+
+  message = reason + " The customer left upset.";
+
+  setTimeout(() => {
+    if (state === "playing") {
+      newCustomer();
+    }
+  }, 900);
+}
+
 function useTrash() {
   if (!holding) {
     message = "Nothing to throw away.";
@@ -1225,34 +1404,118 @@ function useTrash() {
 
   holding = null;
   clearHeldMesh();
-  mistakes++;
-  message = "Thrown away. Mistake counted.";
+
+  addMistake("You threw food away.");
 }
 
 function completeDay() {
   state = "dayclear";
-  recordBestDay();
+  releasePointer();
 
-  if (mistakes === 0) {
+  if (mistakes < RAGE_LIMIT) {
     if (ingredientUnlocks.length > 0) {
       const item = ingredientUnlocks.shift();
       unlockedIngredients.push(item);
-      unlockMessage = "Perfect day! You unlocked: " + item;
+      unlockMessage = "You survived with under 5 mistakes! You unlocked: " + item;
     } else {
-      unlockMessage = "Perfect day! Everything is unlocked.";
+      unlockMessage = "You survived the day! Everything is already unlocked.";
     }
   } else {
-    unlockMessage = "Day finished, but no unlock because you made mistakes.";
+    unlockMessage = "Karen fired you.";
   }
 
   document.getElementById("unlockText").textContent = unlockMessage;
   document.getElementById("dayClear").style.display = "flex";
 }
 
+function startKarenCutscene() {
+  hideMenus();
+  releasePointer();
+
+  state = "karenCutscene";
+  message = "Oh no... Karen heard about all the mistakes.";
+
+  if (customer.group) {
+    customer.group.visible = false;
+  }
+
+  customer.active = false;
+  customer.following = false;
+  customer.seated = false;
+  customer.tableIndex = null;
+
+  karen.active = true;
+  karen.phase = "entering";
+  karen.timer = 0;
+
+  karen.group.visible = true;
+  karen.group.position.copy(entrancePos);
+
+  document.getElementById("karenSpeech").style.display = "none";
+}
+
+function updateKarenCutscene(dt) {
+  karen.timer += dt;
+
+  const karenPos = karen.group.position;
+  const playerPos = player.group.position;
+
+  if (karen.phase === "entering") {
+    const target = playerPos.clone();
+    target.z += 1.2;
+
+    const dir = target.clone().sub(karenPos);
+    const d = dir.length();
+
+    if (d > 0.2) {
+      dir.normalize();
+      karenPos.add(dir.multiplyScalar(3.2 * dt));
+      karen.group.rotation.y = Math.atan2(dir.x, dir.z);
+    } else {
+      karen.phase = "yelling";
+      karen.timer = 0;
+      document.getElementById("karenSpeech").style.display = "block";
+      message = "Karen says: you're fired!";
+    }
+  }
+
+  else if (karen.phase === "yelling") {
+    if (karen.timer >= 2.0) {
+      document.getElementById("karenSpeech").style.display = "none";
+      karen.phase = "sadExit";
+      karen.timer = 0;
+      message = "You sadly walk out of the cafe...";
+    }
+  }
+
+  else if (karen.phase === "sadExit") {
+    const exit = entrancePos.clone();
+    const dir = exit.clone().sub(player.group.position);
+    const d = dir.length();
+
+    if (d > 0.15) {
+      dir.normalize();
+      player.group.position.add(dir.multiplyScalar(2.4 * dt));
+      player.group.rotation.y = Math.atan2(dir.x, dir.z);
+      player.group.rotation.z = Math.sin(karen.timer * 8) * 0.06;
+    } else {
+      player.group.rotation.z = 0;
+      finishKarenFiring();
+    }
+  }
+}
+
+function finishKarenFiring() {
+  karen.group.visible = false;
+  document.getElementById("karenSpeech").style.display = "none";
+
+  firePlayer("Karen reached 5/5 rage and fired you.");
+}
+
 function firePlayer(reason) {
   state = "fired";
-  recordBestDay();
   firedReason = reason;
+
   document.getElementById("firedReason").textContent = reason;
   document.getElementById("survivedText").textContent = "You survived to Day " + day;
   document.getElementById("gameOver").style.display = "flex";
@@ -1292,7 +1555,9 @@ function createHeldMesh(type) {
     heldMesh = box(0.75, 0.16, 0.5, color);
   }
 
-  heldMesh.position.set(0, 2.45, 0);
+  // First-person: hold the item low and in front, like carrying a tray.
+  // The group's yaw matches the look direction, so +Z is straight ahead.
+  heldMesh.position.set(0, player.eyeHeight - 0.55, 0.7);
   player.group.add(heldMesh);
 }
 
@@ -1319,34 +1584,80 @@ function update(dt) {
     updateCutscene(dt);
   }
 
+  if (state === "karenCutscene") {
+    updateKarenCutscene(dt);
+  }
+
   updateCamera();
+  updateBillboards();
   updateHUD();
 }
 
+// Make each character sprite face the camera fully (tilting back toward the
+// steep top-down view so it reads as a standing card, not a flat slab on the
+// floor) while cancelling out the parent group's walking yaw.
+function updateBillboards() {
+  for (let i = 0; i < billboards.length; i++) {
+    const mesh = billboards[i];
+    if (!mesh.parent) continue;
+
+    // Point the sprite's +Z (its face) straight at the camera. Because the
+    // camera sits high above and behind, this tilts the card back so the art
+    // stays fully visible instead of foreshortening into the floor.
+    mesh.parent.getWorldPosition(_bbWorldPos);
+    _bbLook.copy(camera.position).sub(_bbWorldPos).normalize();
+    _bbYaw = Math.atan2(_bbLook.x, _bbLook.z);            // turn to face camera
+    _bbPitch = Math.asin(THREE.MathUtils.clamp(_bbLook.y, -1, 1)); // lean back
+
+    // World orientation = yaw about Y, then lean about X. Convert to local by
+    // subtracting the parent's yaw (the only rotation the parent applies).
+    mesh.rotation.set(_bbPitch, _bbYaw - mesh.parent.rotation.y, 0, "YXZ");
+  }
+}
+
 function updatePlayer(dt) {
-  let dx = 0;
-  let dz = 0;
+  // ----- Look (arrow keys turn/look; mouse-look also feeds player.yaw) -----
+  const turnSpeed = 2.4; // radians/sec
+  if (keys["arrowleft"]) player.yaw += turnSpeed * dt;
+  if (keys["arrowright"]) player.yaw -= turnSpeed * dt;
+  if (keys["arrowup"]) player.pitch += turnSpeed * 0.6 * dt;
+  if (keys["arrowdown"]) player.pitch -= turnSpeed * 0.6 * dt;
 
-  if (keys["w"] || keys["arrowup"]) dz -= 1;
-  if (keys["s"] || keys["arrowdown"]) dz += 1;
-  if (keys["a"] || keys["arrowleft"]) dx -= 1;
-  if (keys["d"] || keys["arrowright"]) dx += 1;
+  // clamp pitch so you can't flip over
+  player.pitch = Math.max(-0.9, Math.min(0.9, player.pitch));
 
-  const len = Math.hypot(dx, dz);
+  // ----- Move (relative to facing) -----
+  let forward = 0;
+  let strafe = 0;
 
-  if (len > 0) {
-    dx /= len;
-    dz /= len;
+  if (keys["w"]) forward += 1;
+  if (keys["s"]) forward -= 1;
+  if (keys["d"]) strafe += 1;
+  if (keys["a"]) strafe -= 1;
 
-    player.group.position.x += dx * player.speed * dt;
-    player.group.position.z += dz * player.speed * dt;
+  if (forward !== 0 || strafe !== 0) {
+    const len = Math.hypot(forward, strafe);
+    forward /= len;
+    strafe /= len;
+
+    // yaw=0 looks toward +Z; forward vector follows yaw.
+    const sin = Math.sin(player.yaw);
+    const cos = Math.cos(player.yaw);
+
+    const moveX = (forward * sin + strafe * cos) * player.speed * dt;
+    const moveZ = (forward * cos - strafe * sin) * player.speed * dt;
+
+    player.group.position.x += moveX;
+    player.group.position.z += moveZ;
 
     player.walk += dt * 10;
-    player.group.rotation.y = Math.atan2(dx, dz);
   }
 
   player.group.position.x = Math.max(-10, Math.min(10, player.group.position.x));
   player.group.position.z = Math.max(-7, Math.min(7, player.group.position.z));
+
+  // Keep the anchor's yaw in sync so held food sits in front of the view.
+  player.group.rotation.y = player.yaw;
 }
 
 function updateCustomer(dt) {
@@ -1374,7 +1685,7 @@ function updateOrderTimer(dt) {
 
   if (currentOrder.timeLeft <= 0) {
     currentOrder.timeLeft = 0;
-    firePlayer("The customer waited too long.");
+    failCurrentOrder("The customer waited too long.");
   }
 }
 
@@ -1406,7 +1717,7 @@ function updateOven(dt) {
       oven.burned = true;
 
       if (!oven.burnMistakeCounted) {
-        mistakes++;
+        addMistake(oven.item.name + " burned in the oven.");
         oven.burnMistakeCounted = true;
       }
 
@@ -1489,19 +1800,20 @@ function updateCutscene(dt) {
 function updateCamera() {
   const p = player.group.position;
 
-  camera.position.lerp(
-    new THREE.Vector3(p.x, p.y + 8.5, p.z + 9.5),
-    0.08
-  );
+  // Eyes at the chef's head.
+  camera.position.set(p.x, p.y + player.eyeHeight, p.z);
 
-  camera.lookAt(p.x, p.y + 1, p.z);
+  // Look direction from yaw/pitch (yaw=0 -> +Z).
+  const lookX = p.x + Math.sin(player.yaw) * Math.cos(player.pitch);
+  const lookY = p.y + player.eyeHeight + Math.sin(player.pitch);
+  const lookZ = p.z + Math.cos(player.yaw) * Math.cos(player.pitch);
+
+  camera.lookAt(lookX, lookY, lookZ);
 }
 
 function updateHUD() {
   document.getElementById("dayText").textContent =
     "Day " + day + " | Orders " + ordersDone + "/" + ordersNeeded + " | Mistakes " + mistakes;
-
-  document.getElementById("bestText").textContent = "Best: Day " + bestDay;
 
   document.getElementById("holdingText").textContent =
     "Holding: " + getHoldingText();
@@ -1529,15 +1841,19 @@ function updateHUD() {
   }
 
   document.getElementById("message").textContent = message;
+
+  updateRageMeter();
 }
 
 function getHoldingText() {
   if (!holding) return "Nothing";
   if (holding.type === "ingredients") return "Ingredients";
   if (holding.type === "rawFood") return "Raw " + holding.recipe.name;
+
   if (holding.type === "cookedFood") {
     return holding.burned ? "Burned " + holding.recipe.name : holding.recipe.name;
   }
+
   return "Something";
 }
 
@@ -1560,7 +1876,9 @@ function getOvenText() {
 
 function animate() {
   requestAnimationFrame(animate);
+
   const dt = Math.min(0.04, clock.getDelta());
+
   update(dt);
   renderer.render(scene, camera);
 }
@@ -1607,8 +1925,32 @@ window.addEventListener("keydown", e => {
 window.addEventListener("keyup", e => {
   keys[e.key.toLowerCase()] = false;
 });
+
+// ----- Mouse look (click to capture the pointer) -----
+const MOUSE_SENS = 0.0022;
+
+renderer.domElement.addEventListener("click", () => {
+  if (state === "playing" && document.pointerLockElement !== renderer.domElement) {
+    renderer.domElement.requestPointerLock();
+  }
+});
+
+document.addEventListener("mousemove", e => {
+  if (document.pointerLockElement !== renderer.domElement) return;
+  if (state !== "playing") return;
+
+  player.yaw -= e.movementX * MOUSE_SENS;
+  player.pitch -= e.movementY * MOUSE_SENS;
+  player.pitch = Math.max(-0.9, Math.min(0.9, player.pitch));
+});
+
+// Release the pointer when leaving the playing state (modals, cutscenes).
+function releasePointer() {
+  if (document.pointerLockElement === renderer.domElement) {
+    document.exitPointerLock();
+  }
+}
 </script>
 
 </body>
 </html>
-
