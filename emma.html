@@ -192,6 +192,34 @@
     #backLink:hover { background: rgba(255, 210, 150, 0.2); transform: translateY(-2px); }
 
     /* ---------- Coach message ---------- */
+    #coach {
+      position: fixed;
+      top: 86px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      background: linear-gradient(180deg, #fff8ec, #ffe6b8);
+      color: #2b1a12;
+      border: 3px solid #3a86ff;
+      border-radius: 16px;
+      padding: 12px 18px 14px;
+      width: 360px; max-width: 86vw;
+      text-align: center;
+      z-index: 8;
+      box-shadow: 0 12px 34px rgba(0,0,0,0.45);
+    }
+    #coachStep {
+      display: inline-block;
+      background: #3a86ff; color: #fff;
+      font-size: 12px; font-weight: bold;
+      padding: 2px 10px; border-radius: 999px; margin-bottom: 6px;
+    }
+    #coachText { font-size: 15px; line-height: 1.45; font-weight: bold; }
+    #coachSkip {
+      margin: 8px 0 0; padding: 5px 12px; font-size: 12px;
+      background: rgba(0,0,0,0.08); box-shadow: none; color: #6b4a33;
+    }
+
     #message {
       position: fixed;
       bottom: 78px;
@@ -279,6 +307,23 @@
 
     .ingGrid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 14px 0; }
 
+    /* upgrade shop cards */
+    .shopRow {
+      display: flex; align-items: center; gap: 12px;
+      background: rgba(255,255,255,0.5);
+      border: 2px solid #d8c2a0; border-radius: 14px;
+      padding: 10px 14px; margin: 8px 0; text-align: left;
+    }
+    .shopRow .sIcon { font-size: 34px; flex: 0 0 auto; }
+    .shopRow .sBody { flex: 1 1 auto; }
+    .shopRow .sName { font-weight: bold; font-size: 16px; }
+    .shopRow .sDesc { font-size: 13px; opacity: 0.8; }
+    .shopRow .sLvl { font-size: 12px; color: #a8744a; font-weight: bold; }
+    .shopRow .sBuy { flex: 0 0 auto; margin: 0; padding: 9px 14px; font-size: 14px; }
+    .shopRow .sBuy:disabled { opacity: 0.5; cursor: default; transform: none; box-shadow: 0 2px 0 rgba(0,0,0,0.12); }
+    .shopRow.maxed { opacity: 0.7; }
+    .pips { letter-spacing: 2px; }
+
     /* prep minigames */
     .prepBar {
       width: 440px; max-width: 88vw; height: 34px;
@@ -358,6 +403,7 @@
     <div id="orderIngredients">—</div>
     <div id="orderSteps"></div>
     <div id="timerBarOuter"><div id="timerBarInner"></div></div>
+    <div id="ovenStatus" style="display:none;margin-top:8px;font-weight:bold;"></div>
   </div>
   <div id="orderList"></div>
 </div>
@@ -379,6 +425,13 @@
 <div id="message">Loading…</div>
 <div id="karenSpeech">YOU'RE FIRED!</div>
 
+<!-- First-run tutorial coach -->
+<div id="coach">
+  <div id="coachStep">1/6</div>
+  <div id="coachText">—</div>
+  <button id="coachSkip" onclick="skipTutorial()">Skip tutorial</button>
+</div>
+
 <!-- Intro -->
 <div id="intro">
   <div class="bigPanel success">
@@ -389,8 +442,10 @@
       and serve before time runs out.
     </p>
     <p style="margin-top:12px;">Make <b>5 mistakes</b> and Karen storms in to fire you. 😤</p>
-    <p style="margin-top:12px;">Survive the day to <b>unlock new recipes</b> & earn tips!</p>
-    <button class="main" onclick="dismissIntro()">Start Day 1 👨‍🍳</button>
+    <p style="margin-top:12px;">Earn <b>tips</b>, spend them in the <b>🛒 Upgrade Shop</b>, and unlock new recipes!</p>
+    <p id="resumeNote" style="display:none;margin-top:12px;color:#2a9d5c;font-weight:bold;"></p>
+    <button id="introBtn" class="main" onclick="dismissIntro()">Start Day 1 👨‍🍳</button>
+    <br><button onclick="newGame()" style="margin-top:6px;font-size:13px;padding:8px 14px;">New Game</button>
   </div>
 </div>
 
@@ -426,7 +481,9 @@
     <h1>😤 YOU GOT FIRED!</h1>
     <p id="firedReason"></p>
     <h3 id="survivedText" style="margin-top:14px;"></h3>
-    <button class="main" onclick="restartGame()">Try Again from Day 1 🔁</button>
+    <p style="font-size:13px;opacity:.8;margin-top:10px;">You keep your upgrades &amp; recipes — and half your tips.</p>
+    <button class="main" onclick="restartGame()">Try Again 🔁</button>
+    <button class="danger" onclick="newGame()">New Game</button>
   </div>
 </div>
 
@@ -436,7 +493,19 @@
     <div id="dayStars" class="star"></div>
     <p id="unlockText"></p>
     <p id="tipText" style="margin-top:8px;font-weight:bold;color:#2a9d5c;"></p>
-    <button class="main" onclick="nextDay()">Start Next Day →</button>
+    <button class="main" onclick="openShop()">🛒 Upgrade Shop</button>
+    <button onclick="nextDay()">Start Next Day →</button>
+  </div>
+</div>
+
+<!-- Upgrade Shop -->
+<div id="shop" class="modal">
+  <div class="panel" style="width:620px;">
+    <h2>🛒 Upgrade Shop</h2>
+    <p>Spend your tips on permanent upgrades. They stick around forever.</p>
+    <p id="shopMoney" style="font-weight:bold;color:#2a9d5c;font-size:18px;margin-top:6px;"></p>
+    <div id="shopItems" style="margin:16px 0;"></div>
+    <button class="main" onclick="closeShop()">Done — Start Next Day →</button>
   </div>
 </div>
 
@@ -490,6 +559,55 @@ const INGREDIENT_EMOJI = {
   "Coffee Beans": "🫘", "Bread": "🍞", "Milk": "🥛", "Cheese": "🧀",
   "Flour": "🌾", "Sugar": "🧂", "Butter": "🧈", "Chocolate Chips": "🍫"
 };
+
+/* ---------- Upgrade shop ----------
+   Tips ("money") are now a real currency. Between days the player spends them on
+   permanent upgrades. Each upgrade has levels with rising costs; effect() reads
+   the current level off `upgrades` and feeds the live game systems (speed, tips,
+   order time, oven timer, strike forgiveness). */
+let upgrades = { speed: 0, tips: 0, ovenTimer: 0, patience: 0, forgive: 0 };
+const UPGRADE_DEFS = [
+  { key: "speed",     emoji: "👟", name: "Faster Hands",     max: 3, cost: l => 30 + l * 25,
+    desc: l => l === 0 ? "Move 12% faster per level." : "Chef speed +" + (l * 12) + "%." },
+  { key: "tips",      emoji: "💰", name: "Bigger Tip Jar",   max: 3, cost: l => 40 + l * 35,
+    desc: l => l === 0 ? "Earn 20% more tips per level." : "Tips +" + (l * 20) + "%." },
+  { key: "ovenTimer", emoji: "⏲️", name: "Oven Timer",       max: 1, cost: () => 35,
+    desc: l => l === 0 ? "Show a live cook/burn countdown on the oven." : "Installed — watch the bar!" },
+  { key: "patience",  emoji: "🧘", name: "Patient Customers", max: 3, cost: l => 35 + l * 30,
+    desc: l => l === 0 ? "Customers wait 12% longer per level." : "Order time +" + (l * 12) + "%." },
+  { key: "forgive",   emoji: "❤️", name: "Forgive a Strike",  max: 2, cost: l => 50 + l * 50,
+    desc: l => l === 0 ? "Start each day with 1 fewer strike per level." : "Heal " + l + " strike(s) each morning." }
+];
+// Live multipliers/bonuses derived from upgrade levels.
+function speedMult()    { return 1 + upgrades.speed * 0.12; }
+function tipMult()      { return 1 + upgrades.tips * 0.20; }
+function patienceMult() { return 1 + upgrades.patience * 0.12; }
+function hasOvenTimer() { return upgrades.ovenTimer >= 1; }
+
+/* ---------- Save / load (localStorage) ---------- */
+const SAVE_KEY = "bakeryBossSave_v1";
+function saveGame() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      day, money, unlockedIngredients, ingredientUnlocks, upgrades, seenTutorial
+    }));
+  } catch (e) { /* storage may be unavailable; fail silently */ }
+}
+function loadGame() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    day = s.day || 1;
+    money = s.money || 0;
+    if (Array.isArray(s.unlockedIngredients)) unlockedIngredients = s.unlockedIngredients;
+    if (Array.isArray(s.ingredientUnlocks)) ingredientUnlocks = s.ingredientUnlocks;
+    if (s.upgrades) upgrades = Object.assign({ speed: 0, tips: 0, ovenTimer: 0, patience: 0, forgive: 0 }, s.upgrades);
+    seenTutorial = !!s.seenTutorial;
+    return true;
+  } catch (e) { return false; }
+}
+let seenTutorial = false;
 
 let player = { group: null, ref: null, speed: 5.6, facing: Math.PI };
 let customer = null; // currently focused/selected party
@@ -652,8 +770,10 @@ function animateWalk(ref, dt, moving, intensity = 1) {
 window.addEventListener("load", () => {
   try {
     clock = new THREE.Clock();
+    const hadSave = loadGame();
     init();
     document.getElementById("loading").style.display = "none";
+    setupIntro(hadSave);
     document.getElementById("intro").style.display = "flex";
     updateHUD();
     updateRageMeter();
@@ -662,6 +782,20 @@ window.addEventListener("load", () => {
     showFatalError(err);
   }
 });
+
+// Tailor the intro screen to new vs. returning players.
+function setupIntro(hadSave) {
+  const btn = document.getElementById("introBtn");
+  const resume = document.getElementById("resumeNote");
+  if (hadSave && day > 1) {
+    btn.textContent = "Continue — Day " + day + " 👨‍🍳";
+    resume.style.display = "block";
+    resume.innerHTML = "Welcome back! You're on <b>Day " + day + "</b> with <b>$" + money + "</b> in tips.";
+  } else {
+    btn.textContent = "Start Day 1 👨‍🍳";
+    resume.style.display = "none";
+  }
+}
 
 function showFatalError(err) {
   console.error(err);
@@ -1053,12 +1187,71 @@ function updateSteam(dt) {
 function dismissIntro() {
   document.getElementById("intro").style.display = "none";
   startDay();
+  if (!seenTutorial) startTutorial();
+}
+
+/* ---------- First-run tutorial coach ----------
+   A lightweight, event-driven coach. Each step listens for one milestone the
+   player hits naturally; reaching it advances to the next tip. No extra game
+   state — tutorialStep just gates which message shows. */
+let tutorialActive = false;
+let tutorialStep = 0;
+// Each step's `milestone` is the action that COMPLETES it (the event that
+// advances to the next tip). The final step is terminal (milestone null).
+const TUTORIAL_STEPS = [
+  { milestone: "greet",  text: "👋 Welcome! Walk to the customer at the door (WASD or click) and press E to greet them." },
+  { milestone: "seat",   text: "Now lead them to a glowing table and press E to seat them. They'll order something." },
+  { milestone: "pantry", text: "Read the order (top-left). Walk to the 🧺 Pantry and press E to grab the exact ingredients." },
+  { milestone: "prep",   text: "Take them to the 🔪 Prep station and press E — nail the quick minigame!" },
+  { milestone: "serve",  text: "Baked items go in the 🔥 Oven (press E). Grab them the moment they're ready, then serve the table — don't let it burn!" },
+  { milestone: null,     text: "🎉 You served your first order! Earn tips, then spend them in the 🛒 Upgrade Shop between days. You've got this, chef!" }
+];
+function startTutorial() {
+  tutorialActive = true;
+  tutorialStep = 0;
+  showTutorialStep();
+}
+function showTutorialStep() {
+  const coach = document.getElementById("coach");
+  if (!tutorialActive || tutorialStep >= TUTORIAL_STEPS.length) { coach.style.display = "none"; return; }
+  const s = TUTORIAL_STEPS[tutorialStep];
+  document.getElementById("coachStep").textContent = (tutorialStep + 1) + "/" + TUTORIAL_STEPS.length;
+  document.getElementById("coachText").textContent = s.text;
+  coach.style.display = "block";
+}
+// Called from game events; advances the coach only if the milestone matches
+// the current step. The current step's milestone is the action that finishes it.
+function tutorialAdvance(milestone) {
+  if (!tutorialActive) return;
+  const current = TUTORIAL_STEPS[tutorialStep];
+  if (current && current.milestone === milestone) {
+    tutorialStep++;
+    showTutorialStep();
+    // If we've just landed on the terminal (milestone-less) step, it's the
+    // celebration — show it, then auto-dismiss after a beat.
+    const landed = TUTORIAL_STEPS[tutorialStep];
+    if (!landed || landed.milestone == null) finishTutorial();
+  }
+}
+function finishTutorial() {
+  // the final "you did it" message is already on screen — keep it briefly, then dismiss for good
+  tutorialActive = false;
+  seenTutorial = true;
+  saveGame();
+  setTimeout(() => { document.getElementById("coach").style.display = "none"; }, 6000);
+}
+function skipTutorial() {
+  tutorialActive = false;
+  seenTutorial = true;
+  saveGame();
+  document.getElementById("coach").style.display = "none";
 }
 
 function startDay() {
   state = "playing";
   ordersDone = 0;
-  mistakes = 0;
+  // Forgive a Strike: begin the day with extra slack before the first real strike shows
+  mistakes = -upgrades.forgive;
   dayTips = 0;
   ordersNeeded = Math.min(3 + Math.floor(day / 2), 8);
 
@@ -1123,7 +1316,9 @@ function spawnCustomer() {
 function createOrder(partyId) {
   const pool = recipes.filter(r => r.ingredients.every(i => unlockedIngredients.includes(i)));
   const recipe = pool[Math.floor(Math.random() * pool.length)];
-  const timeLimit = Math.max(14, recipe.timeLimit - Math.floor(day / 2) * 2);
+  // base limit tightens as days scale up, then Patient Customers loosens it back
+  const baseLimit = Math.max(14, recipe.timeLimit - Math.floor(day / 2) * 2);
+  const timeLimit = Math.round(baseLimit * patienceMult());
   const order = { id: nextOrderId++, partyId, recipe, timeLeft: timeLimit, maxTime: timeLimit, gotIngredients: false, prepped: false, baked: !recipe.needsOven };
   orders.push(order);
   selectOrder(order.id);
@@ -1225,18 +1420,25 @@ function resetOven() {
 function addMistake(reason) {
   if (state === "fired" || state === "dayclear" || state === "karenCutscene") return;
   mistakes++;
-  message = "❌ " + reason + " Karen's rage rises!";
-  popup("✗", player.group.position, "#ef476f");
+  if (mistakes <= 0) {
+    // a forgiveness charge absorbed this one — no strike on the meter
+    message = "❤️ " + reason + " (forgiven — " + (-mistakes) + " left)";
+    popup("❤️", player.group.position, "#9ae6b4");
+  } else {
+    message = "❌ " + reason + " Karen's rage rises!";
+    popup("✗", player.group.position, "#ef476f");
+  }
   updateRageMeter();
   if (mistakes >= RAGE_LIMIT) startKarenCutscene();
 }
 
 function updateRageMeter() {
-  const pct = Math.min(1, mistakes / RAGE_LIMIT);
+  const shown = Math.max(0, mistakes); // forgiveness can push mistakes negative
+  const pct = Math.min(1, shown / RAGE_LIMIT);
   document.getElementById("rageInner").style.width = (pct * 100) + "%";
-  document.getElementById("rageText").textContent = mistakes + " / " + RAGE_LIMIT + " strikes";
+  document.getElementById("rageText").textContent = shown + " / " + RAGE_LIMIT + " strikes";
   let faces = "";
-  for (let i = 0; i < RAGE_LIMIT; i++) faces += i < mistakes ? "😡" : "🙂";
+  for (let i = 0; i < RAGE_LIMIT; i++) faces += i < shown ? "😡" : "🙂";
   document.getElementById("rageFaces").textContent = faces;
 }
 
@@ -1250,7 +1452,8 @@ function interact() {
   if (waitingParty) {
     customer = waitingParty;
     customer.following = true;
-    message = "Lead them to a table, then press E.";
+    message = "Lead them to an empty table, then press E.";
+    tutorialAdvance("greet");
     return;
   }
 
@@ -1299,6 +1502,7 @@ function seatCustomer(index, guest) {
   guest.orderId = order.id;
   selectedOrderId = order.id;
   currentOrder = order;
+  tutorialAdvance("seat");
 }
 
 function openPantry() {
@@ -1342,6 +1546,7 @@ function finishPantry() {
   createHeldMesh("ingredients");
   closePantry();
   message = "Got it! Now hit the prep station 🔪";
+  tutorialAdvance("pantry");
 }
 
 function openPrep() {
@@ -1428,6 +1633,7 @@ function finishPrep() {
   if (!currentOrder) { message = "No order to finish prepping."; state = "playing"; return; }
   currentOrder.prepped = true;
   popup("👌", player.group.position, "#ffd166");
+  tutorialAdvance("prep");
   if (currentOrder.recipe.needsOven) {
     holding = { type: "rawFood", recipe: currentOrder.recipe, burned: false };
     createHeldMesh("rawFood");
@@ -1495,8 +1701,9 @@ function serveTable() {
   if (order.timeLeft <= 0) { failOrder(order.id, "Served too late."); return; }
 
   ordersDone++;
+  // tip scales with how fast you were, then the Bigger Tip Jar upgrade multiplies it
   const speedBonus = Math.round((order.timeLeft / order.maxTime) * 4);
-  const tip = order.recipe.tip + speedBonus;
+  const tip = Math.round((order.recipe.tip + speedBonus) * tipMult());
   money += tip; dayTips += tip;
   popup("+$" + tip, tables[customer.tableIndex].pos, "#9ae6b4");
 
@@ -1506,6 +1713,7 @@ function serveTable() {
   removeOrder(order.id);
   holding = null; clearHeldMesh();
   message = "✅ Served! Nice work, chef. +$" + tip + " tip";
+  tutorialAdvance("serve");
 
   if (ordersDone >= ordersNeeded) completeDay();
   else setTimeout(() => { if (state === "playing") spawnCustomer(); }, 900);
@@ -1536,8 +1744,9 @@ function useTrash() {
 
 function completeDay() {
   state = "dayclear";
-  // star rating from mistakes
-  const stars = mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1;
+  // star rating from real (non-forgiven) strikes
+  const realMistakes = Math.max(0, mistakes);
+  const stars = realMistakes === 0 ? 3 : realMistakes <= 2 ? 2 : 1;
   document.getElementById("dayStars").textContent = "⭐".repeat(stars) + "☆".repeat(3 - stars);
   if (ingredientUnlocks.length > 0) {
     const item = ingredientUnlocks.shift();
@@ -1548,12 +1757,69 @@ function completeDay() {
   }
   document.getElementById("tipText").textContent = "💰 Tips earned today: $" + dayTips + "   (Total: $" + money + ")";
   document.getElementById("dayClear").style.display = "flex";
+  saveGame();
 }
 
 function nextDay() {
   day++;
   document.getElementById("dayClear").style.display = "none";
+  document.getElementById("shop").style.display = "none";
+  saveGame();
   startDay();
+}
+
+/* ---------- Upgrade shop ---------- */
+function openShop() {
+  document.getElementById("shop").style.display = "flex";
+  renderShop();
+}
+function closeShop() {
+  document.getElementById("shop").style.display = "none";
+  // closing the shop advances to the next day, just like the day-clear button
+  nextDay();
+}
+function renderShop() {
+  document.getElementById("shopMoney").textContent = "💰 Tips available: $" + money;
+  const box = document.getElementById("shopItems");
+  box.innerHTML = "";
+  UPGRADE_DEFS.forEach(def => {
+    const lvl = upgrades[def.key];
+    const maxed = lvl >= def.max;
+    const cost = maxed ? 0 : def.cost(lvl);
+    const afford = money >= cost;
+    const row = document.createElement("div");
+    row.className = "shopRow" + (maxed ? " maxed" : "");
+    let pips = "";
+    for (let i = 0; i < def.max; i++) pips += i < lvl ? "🟩" : "⬜";
+    row.innerHTML =
+      `<div class="sIcon">${def.emoji}</div>
+       <div class="sBody">
+         <div class="sName">${def.name}</div>
+         <div class="sDesc">${def.desc(lvl)}</div>
+         <div class="sLvl"><span class="pips">${pips}</span> ${lvl}/${def.max}</div>
+       </div>`;
+    const btn = document.createElement("button");
+    if (maxed) { btn.className = "sBuy"; btn.textContent = "MAX"; btn.disabled = true; }
+    else {
+      btn.className = "sBuy main";
+      btn.textContent = "$" + cost;
+      btn.disabled = !afford;
+      btn.onclick = () => buyUpgrade(def.key);
+    }
+    row.appendChild(btn);
+    box.appendChild(row);
+  });
+}
+function buyUpgrade(key) {
+  const def = UPGRADE_DEFS.find(d => d.key === key);
+  const lvl = upgrades[key];
+  if (lvl >= def.max) return;
+  const cost = def.cost(lvl);
+  if (money < cost) return;
+  money -= cost;
+  upgrades[key]++;
+  saveGame();
+  renderShop();
 }
 
 /* ---------- Karen cutscene ---------- */
@@ -1627,15 +1893,25 @@ function firePlayer(reason) {
 }
 
 function restartGame() {
-  day = 1; money = 0;
-  speedUpgrade = false;
-  cafeExpanded = false;
-  decorPurchased = { pictures: 0, extraTables: 0 };
-  player.speed = 5.6;
-  unlockedIngredients = ["Coffee Beans", "Bread"];
-  ingredientUnlocks = ["Milk", "Cheese", "Flour", "Sugar", "Butter", "Chocolate Chips"];
+  // Fired → keep your hard-earned upgrades & unlocks (permanent progression),
+  // but the day resets so you take another run at it. Half your tips are kept
+  // so a wipe still stings without nuking the economy.
+  day = 1;
+  money = Math.floor(money / 2);
   document.getElementById("gameOver").style.display = "none";
   document.getElementById("dayClear").style.display = "none";
+  saveGame();
+  startDay();
+}
+
+function newGame() {
+  if (!confirm("Erase all progress and start a brand-new save?")) return;
+  day = 1; money = 0;
+  upgrades = { speed: 0, tips: 0, ovenTimer: 0, patience: 0, forgive: 0 };
+  unlockedIngredients = ["Coffee Beans", "Bread"];
+  ingredientUnlocks = ["Milk", "Cheese", "Flour", "Sugar", "Butter", "Chocolate Chips"];
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  hideMenus();
   startDay();
 }
 
@@ -1876,8 +2152,9 @@ function updatePlayer(dt) {
     const len = Math.hypot(mx, mz);
     mx /= len; mz /= len;
 
-    const newX = player.group.position.x + mx * player.speed * dt;
-    const newZ = player.group.position.z + mz * player.speed * dt;
+    const spd = player.speed * speedMult();
+    const newX = player.group.position.x + mx * spd * dt;
+    const newZ = player.group.position.z + mz * spd * dt;
     const nextPos = player.group.position.clone();
 
     if (!isObstructed(newX, player.group.position.z)) nextPos.x = newX;
@@ -2046,6 +2323,27 @@ function updateHUD() {
     if (customer && customer.active && !customer.seated) empty.textContent = customer.following ? "Lead them to a table 🪑" : "Greet the customer at the door 🚪";
     else empty.textContent = "Waiting for the next customer…";
   }
+
+  // Oven Timer upgrade: live cook/burn countdown
+  const ovenEl = document.getElementById("ovenStatus");
+  if (hasOvenTimer() && oven.item) {
+    ovenEl.style.display = "block";
+    if (oven.cooking) {
+      const left = Math.max(0, oven.item.cookTime - oven.cookTimer);
+      ovenEl.textContent = "🔥 Baking: " + left.toFixed(1) + "s";
+      ovenEl.style.color = "#e07a00";
+    } else if (oven.ready) {
+      const left = Math.max(0, oven.item.burnTime - oven.burnTimer);
+      ovenEl.textContent = (left < 2 ? "⚠️ GRAB IT! " : "✅ Ready — burns in ") + left.toFixed(1) + "s";
+      ovenEl.style.color = left < 2 ? "#ef476f" : "#2a9d5c";
+    } else if (oven.burned) {
+      ovenEl.textContent = "💀 Burned — trash it!";
+      ovenEl.style.color = "#b00020";
+    }
+  } else {
+    ovenEl.style.display = "none";
+  }
+
   document.getElementById("message").textContent = message;
 }
 
