@@ -734,6 +734,10 @@ function createCafe() {
   wall(0.4, 5, 16, -11, 2.5, 0);
   wall(0.4, 5, 16, 11, 2.5, 0);
 
+  // interior kitchen partition wall
+  wall(0.4, 5, 6, 0, 2.5, -5);
+  wall(0.4, 5, 6, 0, 2.5, 5);
+
   // warm wainscot stripe
   const stripe = new THREE.Mesh(new THREE.BoxGeometry(22, 0.9, 0.42), mat(0x6b4231, 0.9));
   stripe.position.set(0, 0.7, -7.99); scene.add(stripe);
